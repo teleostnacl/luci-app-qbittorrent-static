@@ -1,0 +1,114 @@
+name: Auto Update qbittorrent-nox-static Version
+
+on:
+  workflow_dispatch:
+  schedule:
+   # 每天北京时间0点跑(UTC+8)
+     - cron:  '0 16 * * *'
+
+jobs:
+  update_version:
+    runs-on: ubuntu-latest
+    env:
+      QB_MAKEFILE_PATH: qbittorrent-nox-static/Makefile
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    # 获取qbittorrent-nox-static的最新版本
+    - name: Get latest release version
+      id: get_version
+      run: |
+        # 获取重定向后的页面URL
+        redirect_url=$(curl -s -I https://github.com/userdocs/qbittorrent-nox-static/releases/latest | grep -i "Location" | cut -d ' ' -f2)
+        
+        # 提取完整版本号
+        full_version=$(basename "$redirect_url" | sed 's/release-//')
+
+        # 提取主版本号
+        main_version=$(echo "$full_version" | cut -d '_' -f 1)
+
+        # 去除回车符
+        full_version=$(echo "$full_version" | tr -d '\r' | tr -d '\n')
+        main_version=$(echo "$main_version" | tr -d '\r' | tr -d '\n')
+
+        # 传递环境变量
+        echo "FULL_VERSION=$full_version" >> $GITHUB_ENV
+        echo "MAIN_VERSION=$main_version" >> $GITHUB_ENV
+
+    # 检查是否需要更新版本号
+    - name: Check and update Makefile
+      id: update_makefile
+      run: |
+        # 读取当前 Makefile 中的版本号
+        old_full_version=$(grep -oP '^PKG_FULL_VERSION:=\K.*' "$QB_MAKEFILE_PATH")
+        old_main_version=$(grep -oP '^PKG_VERSION:=\K.*' "$QB_MAKEFILE_PATH")
+        old_release=$(grep -oP '^PKG_RELEASE:=\K.*' "$QB_MAKEFILE_PATH")
+
+        echo "Current PKG_FULL_VERSION: $old_full_version"
+        echo "Current PKG_VERSION: $old_main_version"
+        echo "New PKG_FULL_VERSION: $FULL_VERSION"
+        echo "New PKG_VERSION: $MAIN_VERSION"
+
+        # 检查是否需要更新 PKG_VERSION 或 PKG_FULL_VERSION
+        if [[ "$FULL_VERSION" != "$old_full_version" || "$MAIN_VERSION" != "$old_main_version" ]]; then
+          # 如果 PKG_VERSION 变了，设置 PKG_RELEASE 为 1
+          if [[ "$MAIN_VERSION" != "$old_main_version" ]]; then
+            new_release=1
+          else
+            # 如果 PKG_VERSION 没有变，但 PKG_FULL_VERSION 变了，PKG_RELEASE 自加 1
+            new_release=$((old_release + 1))
+          fi
+
+          # 更新版本号和 PKG_RELEASE
+          sed -i "s/^PKG_FULL_VERSION:=.*/PKG_FULL_VERSION:=$FULL_VERSION/" "$QB_MAKEFILE_PATH"
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$MAIN_VERSION/" "$QB_MAKEFILE_PATH"
+          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$new_release/" "$QB_MAKEFILE_PATH"
+          
+          echo "UPDATE_NEEDED=true" >> $GITHUB_ENV
+        fi
+
+    # 更新各个架构的Hash值
+    - name: Update hashes for different architectures
+      if: env.UPDATE_NEEDED == 'true'
+      id: update_hashes
+      run: |
+        declare -A ARCH_MAPPING=( 
+          ["i386"]="x86"
+          ["x86_64"]="x86_64"
+          ["aarch64"]="aarch64"
+          ["arm"]="armv7"
+        )
+
+        for arch in "${!ARCH_MAPPING[@]}"; do
+          pkg_arch="${ARCH_MAPPING[$arch]}"
+          file_url="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-${FULL_VERSION}/${pkg_arch}-qbittorrent-nox"
+
+          curl -s -L -o "$pkg_arch-qbittorrent-nox" "$file_url"
+
+          # 计算 SHA256 哈希值
+          hash_value=$(sha256sum "$pkg_arch-qbittorrent-nox" | awk '{print $1}')
+          
+          # 仅替换对应架构的哈希值
+          sed -i "/ifeq (\$(ARCH),$arch)/,/endif/ s|PKG_HASH:=.*|PKG_HASH:=$hash_value|" "$QB_MAKEFILE_PATH"
+        done
+
+    # 提交并推送更改
+    - name: Commit and push changes
+      if: env.UPDATE_NEEDED == 'true'
+      run: |
+        # 检查 Makefile 是否存在
+        if [ -f "$QB_MAKEFILE_PATH" ]; then
+          # 配置 Git 用户信息
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # 提交更改
+          git add "$QB_MAKEFILE_PATH"
+          git commit -m "qbittorrent-nox-static: update to $FULL_VERSION"
+          git push
+        fi

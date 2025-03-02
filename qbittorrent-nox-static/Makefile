@@ -15,18 +15,13 @@ PKG_FULL_VERSION:=5.0.3_v2.0.11
 STRIP:=true
 
 ifeq ($(ARCH),i386)
-    PKG_ARCH:=x86
+	PKG_ARCH:=x86
 	PKG_HASH:=024eedd05bc62972286ce30f59d42e38b9ac02e86618b58a932641f3007bdffb
 endif
 
 ifeq ($(ARCH),x86_64)
 	PKG_ARCH:=x86_64
 	PKG_HASH:=21272b1a13f63fbc82611a3bbfcc5067e2e1f20530f59aa354cdeb9c4edcfe2a
-endif
-
-ifeq ($(ARCH),arm64)
-	PKG_ARCH:=aarch64
-	PKG_HASH:=a8750a5c5aea3d72f63d5890654102637adafc8541e24852f9cccd7df138a784
 endif
 
 ifeq ($(ARCH),aarch64)
