@@ -11,7 +11,7 @@ PKG_RELEASE:=1
 
 LUCI_TITLE:=LuCI support for qBittorrent
 LUCI_PKGARCH:=all
-LUCI_DEPENDS:=@(arm||aarch64||i386||x86_64) qbittorrent-nox-static
+LUCI_DEPENDS:=@(arm||aarch64||i386||x86_64) +qbittorrent-nox-static
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
