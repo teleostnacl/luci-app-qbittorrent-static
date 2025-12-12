@@ -3,8 +3,8 @@ name: Auto Update qbittorrent-nox-static Version
 on:
   workflow_dispatch:
   schedule:
-   # 每天北京时间0点跑(UTC+8)
-     - cron:  '0 16 * * *'
+     # Runs at 00:00, only on Sunday.
+     - cron: '0 0 * * 0'
 
 jobs:
   update_version:
