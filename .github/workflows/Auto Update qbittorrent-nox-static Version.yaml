@@ -74,7 +74,6 @@ jobs:
 
     # 更新各个架构的Hash值
     - name: Update hashes for different architectures
-      if: env.UPDATE_NEEDED == 'true'
       id: update_hashes
       run: |
         set -e # 添加此行，让脚本在任何命令失败时立即退出
@@ -123,7 +122,6 @@ jobs:
 
     # 提交并推送更改
     - name: Commit and push changes
-      if: env.UPDATE_NEEDED == 'true'
       run: |
         # 检查 Makefile 是否存在
         if [ -f "$QB_MAKEFILE_PATH" ]; then
