@@ -77,24 +77,48 @@ jobs:
       if: env.UPDATE_NEEDED == 'true'
       id: update_hashes
       run: |
+        set -e # 添加此行，让脚本在任何命令失败时立即退出
+    
         declare -A ARCH_MAPPING=( 
           ["i386"]="x86"
           ["x86_64"]="x86_64"
           ["aarch64"]="aarch64"
           ["arm"]="armv7"
         )
-
+    
         for arch in "${!ARCH_MAPPING[@]}"; do
           pkg_arch="${ARCH_MAPPING[$arch]}"
           file_url="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-${FULL_VERSION}/${pkg_arch}-qbittorrent-nox"
-
-          curl -s -L -o "$pkg_arch-qbittorrent-nox" "$file_url"
-
+          output_file="${pkg_arch}-qbittorrent-nox"
+    
+          echo "==> Downloading for architecture: ${arch} (${pkg_arch})"
+          echo "    URL: ${file_url}"
+    
+          # 使用 --fail 参数，如果服务器返回 HTTP 错误（如 404），curl 会失败并返回非零退出码
+          if ! curl -s -L --fail -o "$output_file" "$file_url"; then
+            echo "::error::Download failed for architecture ${arch} from URL ${file_url}"
+            # 可以选择检查下载到的文件内容来辅助调试
+            echo "Downloaded content:"
+            cat "$output_file"
+            exit 1
+          fi
+    
+          echo "    Download successful. File size: $(ls -lh "$output_file" | awk '{print $5}')"
+    
           # 计算 SHA256 哈希值
-          hash_value=$(sha256sum "$pkg_arch-qbittorrent-nox" | awk '{print $1}')
+          hash_value=$(sha256sum "$output_file" | awk '{print $1}')
           
+          if [ -z "$hash_value" ]; then
+            echo "::error::Failed to calculate SHA256 hash for ${output_file}"
+            exit 1
+          fi
+          
+          echo "    Calculated SHA256 hash: ${hash_value}"
+    
           # 仅替换对应架构的哈希值
           sed -i "/ifeq (\$(ARCH),$arch)/,/endif/ s|PKG_HASH:=.*|PKG_HASH:=$hash_value|" "$QB_MAKEFILE_PATH"
+          echo "    Successfully updated hash in ${QB_MAKEFILE_PATH}"
+          echo "" # 添加空行以提高可读性
         done
 
     # 提交并推送更改
